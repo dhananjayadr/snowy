@@ -1,9 +1,4 @@
 #!/bin/bash
-#title           :snowy
-#description     :Java Thread Stack Analyzer. Two options: analyze thread dump file or discover and select Java processes
-#author          :dhananjayadr
-#version         :0.1
-#==============================================================================
 
 set -euo pipefail
 
@@ -17,8 +12,22 @@ WHITE='\033[1;37m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+show_banner() {
+    echo -e "${CYAN}"
+    echo "      _._"
+    echo "   .-'66||        ,;'"
+    echo "  (O  ,:|/.----..;'"
+    echo "   \`=' \\_  ____  |"
+    echo "        |||   |||"
+    echo "        |||   |||"
+    echo "        mm'   mm'"
+    echo -e "${NC}"
+    echo -e "${BOLD}${WHITE}Java Thread Stack Analyzer${NC}"
+    echo ""
+}
+
 usage() {
-    echo -e "${BOLD}Java Thread Stack Analyzer${NC}"
+    show_banner
     echo -e "${CYAN}Usage:${NC}"
     echo -e "  $0 <thread_dump_file>    ${GREEN}# Analyze thread dump file${NC}"
     echo -e "  $0                       ${GREEN}# Discover processes and select interactively${NC}"
@@ -31,6 +40,10 @@ usage() {
 analyze_thread_dump() {
     local input_source="$1"
     local is_file="$2"
+    
+    if [ "$is_file" = true ]; then
+        show_banner
+    fi
     
     if [ "$is_file" = true ]; then
         echo -e "${BOLD}${CYAN}Analyzing thread dump file: $input_source${NC}"
@@ -171,7 +184,9 @@ analyze_thread_dump() {
 }
 
 discover_and_select() {
+    show_banner
     echo -e "${BOLD}${CYAN}Discovering Java processes...${NC}"
+    
     local processes
     processes=$(jps -l | grep '\.jar$' 2>/dev/null || true)
     
