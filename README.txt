@@ -8,17 +8,35 @@ I named the script snowy (Tintin’s dog).
 
 USAGE
 =====
-1. Analyze a thread dump file: ./snowy threaddump.txt
-2. Interactive mode (discover processes): ./snowy
+  1. Analyze a thread dump file: ./snowy threaddump.txt
+  2. Interactive mode (discover processes): ./snowy
 
 Help
 =========
-./snowy -h
+  ./snowy -h
 
 OUTPUT
 ======
-1. Total thread count
-2. Groups of threads with similar stack traces
-3. Thread names and their states
-4. Stack trace signatures with normalized addresses
-5. Colorized output for easy reading
+  1. Total thread count
+  2. Groups of threads with similar stack traces
+  3. Thread names and their states
+  4. Stack trace signatures with normalized addresses
+  5. Colorized output for easy reading
+  6. Console output
+  -----------------
+  [~] $ ./snowy ThreadDumps_1743765301_1.txt
+  
+        _._
+     .-'66||        ,;'
+    (O  ,:|/.----..;'
+     `=' \_  ____  |
+          |||   |||
+          |||   |||
+          mm'   mm'
+  
+  Java Thread Stack Analyzer
+  
+  Processing thread dump...
+  
+  70 threads found (60 with stack traces, 10 without)
+  ========================================================================
