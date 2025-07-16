@@ -8,7 +8,7 @@
         |||   |||
         mm'   mm'
 
-Java Thread Stack Analyzer
+Java Thread Stack Analyser
 
 Processing thread dump...
 
@@ -21,7 +21,7 @@ Name
 ----
 I named the script snowy (Tintin’s dog).
 
-Java Thread dump Analyzer
+Java Thread dump Analyser
 -------------------------
 A simple tool to analyze Java thread dumps and group threads by stack trace patterns.
 
