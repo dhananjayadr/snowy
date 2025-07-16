@@ -22,7 +22,7 @@ show_banner() {
     echo "        |||   |||"
     echo "        mm'   mm'"
     echo -e "${NC}"
-    echo -e "${BOLD}${WHITE}Java Thread Stack Analyzer${NC}"
+    echo -e "${BOLD}${WHITE}Java Thread Stack Analyser${NC}"
     echo ""
 }
 
