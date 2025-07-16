@@ -1,6 +1,4 @@
 #!/bin/bash
-
-#!/bin/bash
 #title           :snowy
 #description     :Java Thread Stack Analyzer. Two options: analyze thread dump file or discover and select Java processes
 #author          :dhananjayadr
