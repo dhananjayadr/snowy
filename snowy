@@ -1,0 +1,244 @@
+#!/bin/bash
+
+#!/bin/bash
+#title           :snowy
+#description     :Java Thread Stack Analyzer. Two options: analyze thread dump file or discover and select Java processes
+#author          :dhananjayadr
+#version         :0.1
+#==============================================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+usage() {
+    echo -e "${BOLD}Java Thread Stack Analyzer${NC}"
+    echo -e "${CYAN}Usage:${NC}"
+    echo -e "  $0 <thread_dump_file>    ${GREEN}# Analyze thread dump file${NC}"
+    echo -e "  $0                       ${GREEN}# Discover processes and select interactively${NC}"
+    echo ""
+    echo -e "${CYAN}Examples:${NC}"
+    echo -e "  $0 threaddump.txt        ${GREEN}# Analyze file${NC}"
+    echo -e "  $0                       ${GREEN}# Interactive mode${NC}"
+}
+
+analyze_thread_dump() {
+    local input_source="$1"
+    local is_file="$2"
+    
+    if [ "$is_file" = true ]; then
+        echo -e "${BOLD}${CYAN}Analyzing thread dump file: $input_source${NC}"
+        if [ ! -f "$input_source" ]; then
+            echo -e "${RED}Error: File '$input_source' not found${NC}"
+            exit 1
+        fi
+        cat "$input_source"
+    else
+        echo -e "${BOLD}${CYAN}Analyzing PID: $input_source${NC}"
+        if ! kill -0 "$input_source" 2>/dev/null; then
+            echo -e "${RED}Error: Process $input_source not found or not accessible${NC}"
+            exit 1
+        fi
+        jstack "$input_source" 2>/dev/null
+    fi | awk -v RED="$RED" -v GREEN="$GREEN" -v YELLOW="$YELLOW" -v BLUE="$BLUE" \
+           -v MAGENTA="$MAGENTA" -v CYAN="$CYAN" -v WHITE="$WHITE" \
+           -v BOLD="$BOLD" -v NC="$NC" '
+    BEGIN { 
+        total=0; with_stack=0; no_stack=0 
+        print CYAN "Processing thread dump..." NC
+    }
+    /^"/ {
+        # Process previous thread
+        if (name != "") {
+            if (stack == "") {
+                no_stack_list[no_stack++] = name
+            } else {
+                sig = stack
+                gsub(/@[0-9a-fA-F]+/, "@ADDR", sig)
+                gsub(/0x[0-9a-fA-F]+/, "0xADDR", sig)
+                gsub(/:[0-9]+\)/, ":LINE)", sig)
+                if (!(sig in groups)) {
+                    groups[sig] = ""
+                    samples[sig] = name
+                    orig[sig] = stack
+                    sigs[++sig_count] = sig
+                }
+                groups[sig] = groups[sig] name "\n"
+                counts[sig]++
+                with_stack++
+            }
+        }
+        # Start new thread
+        name = $0
+        gsub(/^"/, "", name)
+        gsub(/".*/, "", name)
+        stack = ""
+        state = ""
+        total++
+    }
+    /Thread\.State:/ { state = $0 }
+    /^[\t ]*at / {
+        if (stack == "") stack = $0
+        else stack = stack "\n" $0
+    }
+    /^[\t ]*- / {
+        if (stack != "") stack = stack "\n" $0
+    }
+    /non-Java thread/ {
+        if (name != "") no_stack_list[no_stack++] = name ": non-Java thread"
+        name = ""
+    }
+    END {
+        # Process last thread
+        if (name != "") {
+            if (stack == "") {
+                no_stack_list[no_stack++] = name
+            } else {
+                sig = stack
+                gsub(/@[0-9a-fA-F]+/, "@ADDR", sig)
+                gsub(/0x[0-9a-fA-F]+/, "0xADDR", sig)
+                gsub(/:[0-9]+\)/, ":LINE)", sig)
+                if (!(sig in groups)) {
+                    groups[sig] = ""
+                    samples[sig] = name
+                    orig[sig] = stack
+                    sigs[++sig_count] = sig
+                }
+                groups[sig] = groups[sig] name "\n"
+                counts[sig]++
+                with_stack++
+            }
+        }
+        
+        print "\n" BOLD GREEN total " threads found " NC "(" YELLOW with_stack " with stack traces" NC ", " MAGENTA no_stack " without" NC ")"
+        print BOLD "========================================================================" NC
+        
+        # Sort signatures by count (bubble sort since asorti not available)
+        for (i = 1; i <= sig_count; i++) {
+            for (j = i + 1; j <= sig_count; j++) {
+                if (counts[sigs[i]] < counts[sigs[j]]) {
+                    temp = sigs[i]
+                    sigs[i] = sigs[j]
+                    sigs[j] = temp
+                }
+            }
+        }
+        
+        # Print sorted groups
+        for (i = 1; i <= sig_count; i++) {
+            sig = sigs[i]
+            count = counts[sig]
+            print "\n" BOLD BLUE "[" count " threads] Stack trace signature:" NC
+            print BOLD "----------------------------------------" NC
+            split(groups[sig], names, "\n")
+            for (j in names) {
+                if (names[j] != "") {
+                    # Try to extract state info from original stack
+                    if (match(orig[sig], /awaiting notification/)) {
+                        print YELLOW "\"" names[j] "\"" NC ": " CYAN "awaiting notification" NC
+                    } else if (match(orig[sig], /sleeping/)) {
+                        print YELLOW "\"" names[j] "\"" NC ": " MAGENTA "sleeping" NC
+                    } else if (match(orig[sig], /runnable/)) {
+                        print YELLOW "\"" names[j] "\"" NC ": " GREEN "runnable" NC
+                    } else if (match(orig[sig], /blocked/)) {
+                        print YELLOW "\"" names[j] "\"" NC ": " RED "blocked" NC
+                    } else if (match(orig[sig], /waiting/)) {
+                        print YELLOW "\"" names[j] "\"" NC ": " BLUE "waiting" NC
+                    } else {
+                        print YELLOW "\"" names[j] "\"" NC ": " WHITE "unknown state" NC
+                    }
+                }
+            }
+            print ""
+            print WHITE orig[sig] NC
+        }
+        
+        if (no_stack > 0) {
+            print "\n" BOLD MAGENTA "[" no_stack " threads] No stack trace available:" NC
+            print BOLD "----------------------------------------" NC
+            for (i = 0; i < no_stack; i++) {
+                print YELLOW "\"" no_stack_list[i] "\"" NC
+            }
+            print WHITE "\t<empty stack>" NC
+        }
+    }'
+}
+
+discover_and_select() {
+    echo -e "${BOLD}${CYAN}Discovering Java processes...${NC}"
+    local processes
+    processes=$(jps -l | grep '\.jar$' 2>/dev/null || true)
+    
+    if [ -z "$processes" ]; then
+        echo -e "${RED}No Java processes with .jar files found${NC}"
+        exit 1
+    fi
+    
+    echo -e "\n${BOLD}${GREEN}Found Java processes:${NC}"
+    echo "$processes" | nl -w2 -s'. ' | while read -r line; do
+        local num=$(echo "$line" | awk '{print $1}')
+        local pid=$(echo "$line" | awk '{print $2}')
+        local jar=$(echo "$line" | awk '{print $3}')
+        echo -e "${YELLOW}$num${NC} PID: ${CYAN}$pid${NC} - ${WHITE}$jar${NC}"
+    done
+    
+    echo -e "\n${BOLD}Select a process to analyze:${NC}"
+    read -p "Enter number: " selection
+    
+    if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}Invalid selection. Please enter a number.${NC}"
+        exit 1
+    fi
+    
+    local selected_line
+    selected_line=$(echo "$processes" | sed -n "${selection}p")
+    
+    if [ -z "$selected_line" ]; then
+        echo -e "${RED}Invalid selection. Please choose a valid number.${NC}"
+        exit 1
+    fi
+    
+    local selected_pid
+    selected_pid=$(echo "$selected_line" | awk '{print $1}')
+    
+    echo -e "\n${BOLD}${GREEN}Selected process:${NC} ${CYAN}$selected_pid${NC} - ${WHITE}$(echo "$selected_line" | awk '{print $2}')${NC}"
+    echo ""
+    
+    analyze_thread_dump "$selected_pid" false
+}
+
+main() {
+    if [ $# -eq 0 ]; then
+        if ! command -v jps &> /dev/null; then
+            echo -e "${RED}Error: jps command not found. Please ensure Java development tools are installed.${NC}"
+            exit 1
+        fi
+        
+        if ! command -v jstack &> /dev/null; then
+            echo -e "${RED}Error: jstack command not found. Please ensure Java development tools are installed.${NC}"
+            exit 1
+        fi
+        
+        discover_and_select
+    elif [ $# -eq 1 ]; then
+        if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+            usage
+            exit 0
+        fi
+        analyze_thread_dump "$1" true
+    else
+        echo -e "${RED}Error: Too many arguments${NC}"
+        usage
+        exit 1
+    fi
+}
+
+main "$@"
